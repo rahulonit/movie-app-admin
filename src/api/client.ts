@@ -1,7 +1,15 @@
-import axios from 'axios';
+/// <reference types="vite/client" />
+
+import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
+
+const normalizeBaseUrl = (raw?: string) => {
+  if (!raw) return 'https://movie-app-backend-eta.vercel.app/api';
+  if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
+  return `https://${raw.replace(/^\//, '')}`;
+};
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE || 'http://localhost:5002/api'
+  baseURL: normalizeBaseUrl(import.meta.env.VITE_API_BASE)
 });
 
 const getAccessToken = () => localStorage.getItem('accessToken');
@@ -53,10 +61,12 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+type RetryConfig = AxiosRequestConfig & { _retry?: boolean };
+
 api.interceptors.response.use(
   (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
+  async (error: AxiosError) => {
+    const originalRequest = error.config as RetryConfig;
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       const newToken = await refreshAccessToken();
