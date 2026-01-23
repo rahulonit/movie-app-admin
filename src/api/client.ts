@@ -54,9 +54,13 @@ const refreshAccessToken = async (): Promise<string | null> => {
 
 api.interceptors.request.use((config) => {
   const token = getAccessToken();
+  console.log('[API] Request interceptor - Token:', token ? token.slice(0, 20) + '...' : 'NO TOKEN');
   if (token) {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
+    console.log('[API] Authorization header set');
+  } else {
+    console.warn('[API] NO TOKEN FOUND - request will likely fail with 401');
   }
   return config;
 }, (error) => Promise.reject(error));
