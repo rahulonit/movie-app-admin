@@ -73,7 +73,7 @@ const GENRES = [
 
 const LANGUAGES = [
   'English',
-  'Hindi',
+  'हिंदी',
   'Tamil',
   'Telugu',
   'Kannada',
