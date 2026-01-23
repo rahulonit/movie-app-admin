@@ -207,6 +207,15 @@ const Content: React.FC = () => {
         genres: sanitizedGenres,
         language: form.language
       };
+      
+      // Debug: log Mux IDs being sent
+      console.log('[Content] Movie payload:', {
+        title: payload.title,
+        muxPlaybackId: payload.muxPlaybackId,
+        muxAssetId: payload.muxAssetId,
+        fullPayload: payload
+      });
+      
       if (editingId) {
         await api.put(`/admin/movies/${editingId}`, payload);
       } else {

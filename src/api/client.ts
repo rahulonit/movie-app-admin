@@ -70,6 +70,14 @@ type RetryConfig = AxiosRequestConfig & { _retry?: boolean };
 api.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
+    // Log error details including debug field from backend
+    console.log('[API] Response error:', {
+      status: error.response?.status,
+      message: (error.response?.data as any)?.message,
+      debug: (error.response?.data as any)?.debug,
+      url: error.config?.url
+    });
+    
     const originalRequest = error.config as RetryConfig;
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
