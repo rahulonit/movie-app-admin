@@ -59,7 +59,7 @@ api.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
-});
+}, (error) => Promise.reject(error));
 
 type RetryConfig = AxiosRequestConfig & { _retry?: boolean };
 
