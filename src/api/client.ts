@@ -3,7 +3,7 @@
 import axios, { type AxiosError, type AxiosRequestConfig } from 'axios';
 
 const normalizeBaseUrl = (raw?: string) => {
-  if (!raw) return 'https://movie-app-backend-eta.vercel.app/api';
+  if (!raw) return 'https://movie-app-backend-ecru.vercel.app/api';
   if (raw.startsWith('http://') || raw.startsWith('https://')) return raw;
   return `https://${raw.replace(/^\//, '')}`;
 };

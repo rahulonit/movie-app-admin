@@ -48,11 +48,20 @@ type MoviePayload = {
   isPremium: boolean;
   // Optional IMDB enrichment fields
   imdbId?: string;
-  director?: string;
-  writer?: string;
-  stars?: string[];
   imdbRating?: number;
   imdbLink?: string;
+  rated?: string;
+  released?: string;
+  runtime?: string;
+  director?: string;
+  writer?: string;
+  actors?: string;
+  plot?: string;
+  languages?: string;
+  country?: string;
+  awards?: string;
+  omdbPoster?: string;
+  ratings?: Array<{ source: string; value: string }>;
 };
 
 const GENRES = [
@@ -254,12 +263,17 @@ const Content: React.FC = () => {
       return;
     }
 
+    console.log('[IMDB Search] Starting search for:', query);
     setImdbSearching(true);
     try {
+      console.log('[IMDB Search] Making API call to /admin/search-imdb');
       const res = await api.get('/admin/search-imdb', { params: { query } });
+      console.log('[IMDB Search] Response received:', res.data);
       setImdbResults(res.data.data || []);
+      console.log('[IMDB Search] Results set:', res.data.data?.length || 0, 'movies');
     } catch (err: any) {
-      console.error('IMDB search failed:', err);
+      console.error('[IMDB Search] Error:', err);
+      console.error('[IMDB Search] Error response:', err?.response?.data);
       setImdbResults([]);
     } finally {
       setImdbSearching(false);
@@ -271,15 +285,24 @@ const Content: React.FC = () => {
     setForm((prev) => ({
       ...prev,
       title: imdbMovie.title || prev.title,
-      description: imdbMovie.description || prev.description,
+      description: imdbMovie.plot || imdbMovie.description || prev.description,
       releaseYear: imdbMovie.releaseYear || prev.releaseYear,
       duration: imdbMovie.duration || prev.duration,
       imdbRating: imdbMovie.imdbRating || prev.imdbRating,
       imdbId: imdbMovie.imdbId || prev.imdbId,
+      imdbLink: imdbMovie.imdbLink || prev.imdbLink,
+      rated: imdbMovie.rated || prev.rated,
+      released: imdbMovie.released || prev.released,
+      runtime: imdbMovie.runtime || prev.runtime,
       director: imdbMovie.director || prev.director,
       writer: imdbMovie.writer || prev.writer,
-      stars: imdbMovie.stars || prev.stars,
-      imdbLink: imdbMovie.imdbLink || prev.imdbLink,
+      actors: imdbMovie.actors || prev.actors,
+      plot: imdbMovie.plot || prev.plot,
+      languages: imdbMovie.languages || prev.languages,
+      country: imdbMovie.country || prev.country,
+      awards: imdbMovie.awards || prev.awards,
+      omdbPoster: imdbMovie.posterUrl || imdbMovie.poster || prev.omdbPoster,
+      ratings: imdbMovie.ratings || prev.ratings,
       // Try to map IMDB genres to available genres
       genres: (imdbMovie.genres || [])
         .filter((g: string) => GENRES.includes(g))
@@ -372,9 +395,10 @@ const Content: React.FC = () => {
                       )}
                       <Stack spacing={0.5} flex={1}>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>{movie.title}</Typography>
-                        <Typography variant="caption">⭐ {movie.imdbRating}/10 • {movie.releaseYear}</Typography>
+                        <Typography variant="caption">⭐ {movie.imdbRating}/10 • {movie.year || movie.releaseYear}</Typography>
+                        {movie.rated && <Typography variant="caption" sx={{ color: '#666' }}>Rated: {movie.rated}</Typography>}
                         <Typography variant="caption" sx={{ color: '#666' }}>Dir: {movie.director}</Typography>
-                        <Typography variant="caption" sx={{ color: '#666' }}>Cast: {movie.stars?.slice(0, 2).join(', ')}</Typography>
+                        <Typography variant="caption" sx={{ color: '#666' }}>Cast: {movie.actors}</Typography>
                       </Stack>
                     </Stack>
                   </Box>
@@ -413,15 +437,37 @@ const Content: React.FC = () => {
           </Box>
 
           {/* IMDB Enrichment Fields */}
-          {(form.imdbId || form.director || form.imdbRating) && (
+          {(form.imdbId || form.director || form.imdbRating || form.omdbPoster) && (
             <Box sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1, border: '1px solid #90caf9' }}>
-              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>📋 IMDB Enrichment</Typography>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>📋 IMDB Enrichment Data</Typography>
               <Stack spacing={1}>
                 {form.imdbId && <Typography variant="caption">🆔 IMDB ID: {form.imdbId}</Typography>}
+                {form.imdbRating && <Typography variant="caption">⭐ IMDB Rating: {form.imdbRating}/10</Typography>}
+                {form.rated && <Typography variant="caption">🔞 Rated: {form.rated}</Typography>}
+                {form.released && <Typography variant="caption">📅 Released: {form.released}</Typography>}
+                {form.runtime && <Typography variant="caption">⏱️ Runtime: {form.runtime}</Typography>}
                 {form.director && <Typography variant="caption">🎬 Director: {form.director}</Typography>}
                 {form.writer && <Typography variant="caption">✍️ Writer: {form.writer}</Typography>}
-                {form.imdbRating && <Typography variant="caption">⭐ IMDB Rating: {form.imdbRating}/10</Typography>}
-                {form.stars && form.stars.length > 0 && <Typography variant="caption">👥 Cast: {form.stars.join(', ')}</Typography>}
+                {form.actors && <Typography variant="caption">👥 Actors: {form.actors}</Typography>}
+                {form.languages && <Typography variant="caption">🌐 Languages: {form.languages}</Typography>}
+                {form.country && <Typography variant="caption">🌍 Country: {form.country}</Typography>}
+                {form.awards && <Typography variant="caption">🏆 Awards: {form.awards}</Typography>}
+                {form.omdbPoster && (
+                  <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                    <Typography variant="caption">🎨 OMDB Poster:</Typography>
+                    <Box component="img" src={form.omdbPoster} sx={{ height: 60, borderRadius: 0.5 }} />
+                  </Box>
+                )}
+                {form.ratings && form.ratings.length > 0 && (
+                  <Box>
+                    <Typography variant="caption" sx={{ fontWeight: 600 }}>📊 Ratings:</Typography>
+                    {form.ratings.map((r, i) => (
+                      <Typography key={i} variant="caption" sx={{ display: 'block', ml: 2 }}>
+                        • {r.source}: {r.value}
+                      </Typography>
+                    ))}
+                  </Box>
+                )}
               </Stack>
             </Box>
           )}
