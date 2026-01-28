@@ -46,6 +46,13 @@ type MoviePayload = {
   cloudflareVideoId: string;
   maturityRating: 'U' | 'UA' | 'A';
   isPremium: boolean;
+  // Optional IMDB enrichment fields
+  imdbId?: string;
+  director?: string;
+  writer?: string;
+  stars?: string[];
+  imdbRating?: number;
+  imdbLink?: string;
 };
 
 const GENRES = [
@@ -97,7 +104,13 @@ const emptyMovie = (): MoviePayload => ({
   trailerUrl: '',
   cloudflareVideoId: '',
   maturityRating: 'U',
-  isPremium: false
+  isPremium: false,
+  imdbId: '',
+  director: '',
+  writer: '',
+  stars: [],
+  imdbRating: 0,
+  imdbLink: ''
 });
 
 const Content: React.FC = () => {
@@ -108,6 +121,8 @@ const Content: React.FC = () => {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [form, setForm] = useState<MoviePayload>(emptyMovie());
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [imdbSearching, setImdbSearching] = useState(false);
+  const [imdbResults, setImdbResults] = useState<any[]>([]);
   const dialogTitle = useMemo(() => (editingId ? 'Edit Movie' : 'Create Movie'), [editingId]);
 
   const load = async () => {
@@ -237,6 +252,50 @@ const Content: React.FC = () => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
+  const handleImdbSearch = async (query: string) => {
+    if (!query || query.length < 2) {
+      setImdbResults([]);
+      return;
+    }
+
+    setImdbSearching(true);
+    try {
+      const res = await api.get('/admin/search-imdb', { params: { query } });
+      setImdbResults(res.data.data || []);
+    } catch (err: any) {
+      console.error('IMDB search failed:', err);
+      setImdbResults([]);
+    } finally {
+      setImdbSearching(false);
+    }
+  };
+
+  const fillMovieFromImdb = (imdbMovie: any) => {
+    // Auto-fill form with IMDB data
+    setForm((prev) => ({
+      ...prev,
+      title: imdbMovie.title || prev.title,
+      description: imdbMovie.description || prev.description,
+      releaseYear: imdbMovie.releaseYear || prev.releaseYear,
+      duration: imdbMovie.duration || prev.duration,
+      imdbRating: imdbMovie.imdbRating || prev.imdbRating,
+      imdbId: imdbMovie.imdbId || prev.imdbId,
+      director: imdbMovie.director || prev.director,
+      writer: imdbMovie.writer || prev.writer,
+      stars: imdbMovie.stars || prev.stars,
+      imdbLink: imdbMovie.imdbLink || prev.imdbLink,
+      // Try to map IMDB genres to available genres
+      genres: (imdbMovie.genres || [])
+        .filter((g: string) => GENRES.includes(g))
+        .slice(0, 5)
+    }));
+    setImdbResults([]);
+  };
+
+  const updateField = (key: keyof MoviePayload, value: any) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
   return (
     <Stack spacing={2}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -280,7 +339,55 @@ const Content: React.FC = () => {
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent sx={{ display: 'grid', gap: 2, pt: 2 }}>
-          <TextField label="Title" value={form.title} onChange={(e) => updateField('title', e.target.value)} required fullWidth />
+          {/* IMDB Search Section */}
+          <Box sx={{ p: 2, bgcolor: '#f5f5f5', borderRadius: 1, border: '1px solid #ddd' }}>
+            <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>🎬 Search IMDB (Optional)</Typography>
+            <TextField
+              label="Search movie by title"
+              placeholder="e.g., Inception, The Matrix..."
+              onChange={(e) => handleImdbSearch(e.target.value)}
+              disabled={imdbSearching}
+              fullWidth
+              size="small"
+            />
+            {imdbSearching && <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>Searching...</Typography>}
+            {imdbResults.length > 0 && (
+              <Stack spacing={1} sx={{ mt: 2 }}>
+                {imdbResults.map((movie, idx) => (
+                  <Box
+                    key={idx}
+                    sx={{
+                      p: 1.5,
+                      border: '1px solid #ddd',
+                      borderRadius: 1,
+                      bgcolor: 'white',
+                      cursor: 'pointer',
+                      '&:hover': { bgcolor: '#f9f9f9' }
+                    }}
+                    onClick={() => fillMovieFromImdb(movie)}
+                  >
+                    <Stack direction="row" spacing={2}>
+                      {movie.posterUrl && (
+                        <Box
+                          component="img"
+                          src={movie.posterUrl}
+                          sx={{ width: 50, height: 75, objectFit: 'cover', borderRadius: 0.5 }}
+                        />
+                      )}
+                      <Stack spacing={0.5} flex={1}>
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>{movie.title}</Typography>
+                        <Typography variant="caption">⭐ {movie.imdbRating}/10 • {movie.releaseYear}</Typography>
+                        <Typography variant="caption" sx={{ color: '#666' }}>Dir: {movie.director}</Typography>
+                        <Typography variant="caption" sx={{ color: '#666' }}>Cast: {movie.stars?.slice(0, 2).join(', ')}</Typography>
+                      </Stack>
+                    </Stack>
+                  </Box>
+                ))}
+              </Stack>
+            )}
+          </Box>
+
+          {/* Basic Movie Info */}
           <TextField label="Title" value={form.title} onChange={(e) => updateField('title', e.target.value)} required fullWidth error={!!fieldErrors.title} helperText={fieldErrors.title} />
           <TextField label="Description" value={form.description} onChange={(e) => updateField('description', e.target.value)} multiline minRows={2} fullWidth error={!!fieldErrors.description} helperText={fieldErrors.description} />
           <Autocomplete
@@ -308,6 +415,21 @@ const Content: React.FC = () => {
             <TextField label="Duration (min)" type="number" value={form.duration} onChange={(e) => updateField('duration', Number(e.target.value))} error={!!fieldErrors.duration} helperText={fieldErrors.duration} />
             <TextField label="Rating" type="number" value={form.rating ?? 0} onChange={(e) => updateField('rating', Number(e.target.value))} />
           </Box>
+
+          {/* IMDB Enrichment Fields */}
+          {(form.imdbId || form.director || form.imdbRating) && (
+            <Box sx={{ p: 2, bgcolor: '#e3f2fd', borderRadius: 1, border: '1px solid #90caf9' }}>
+              <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>📋 IMDB Enrichment</Typography>
+              <Stack spacing={1}>
+                {form.imdbId && <Typography variant="caption">🆔 IMDB ID: {form.imdbId}</Typography>}
+                {form.director && <Typography variant="caption">🎬 Director: {form.director}</Typography>}
+                {form.writer && <Typography variant="caption">✍️ Writer: {form.writer}</Typography>}
+                {form.imdbRating && <Typography variant="caption">⭐ IMDB Rating: {form.imdbRating}/10</Typography>}
+                {form.stars && form.stars.length > 0 && <Typography variant="caption">👥 Cast: {form.stars.join(', ')}</Typography>}
+              </Stack>
+            </Box>
+          )}
+
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 2 }}>
             <TextField label="Poster Vertical URL" value={form.poster.vertical} onChange={(e) => updateField('poster', { ...form.poster, vertical: e.target.value })} error={!!fieldErrors.posterVertical} helperText={fieldErrors.posterVertical} />
             <TextField label="Poster Horizontal URL" value={form.poster.horizontal} onChange={(e) => updateField('poster', { ...form.poster, horizontal: e.target.value })} error={!!fieldErrors.posterHorizontal} helperText={fieldErrors.posterHorizontal} />
