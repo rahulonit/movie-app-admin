@@ -248,10 +248,6 @@ const Content: React.FC = () => {
     }
   };
 
-  const updateField = (key: keyof MoviePayload, value: any) => {
-    setForm((prev) => ({ ...prev, [key]: value }));
-  };
-
   const handleImdbSearch = async (query: string) => {
     if (!query || query.length < 2) {
       setImdbResults([]);
