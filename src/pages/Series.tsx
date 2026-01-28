@@ -109,8 +109,7 @@ const Series: React.FC = () => {
     title: '',
     description: '',
     duration: 0,
-    muxPlaybackId: '',
-    muxAssetId: '',
+    cloudflareVideoId: '',
     thumbnail: ''
   });
   const dialogTitle = useMemo(() => (editingId ? 'Edit Series' : 'Create Series'), [editingId]);
@@ -260,7 +259,7 @@ const Series: React.FC = () => {
     if (!episodeForm.title) missing.push('title');
     if (!episodeForm.description) missing.push('description');
     if (!episodeForm.duration) missing.push('duration');
-    if (!episodeForm.muxPlaybackId || !episodeForm.muxAssetId) missing.push('Mux IDs');
+    if (!episodeForm.cloudflareVideoId) missing.push('Cloudflare Video ID');
     if (!episodeForm.thumbnail) missing.push('thumbnail');
     if (missing.length) {
       setError(`Missing required: ${missing.join(', ')}`);
@@ -272,8 +271,7 @@ const Series: React.FC = () => {
         title: episodeForm.title,
         description: episodeForm.description,
         duration: episodeForm.duration,
-        muxPlaybackId: episodeForm.muxPlaybackId,
-        muxAssetId: episodeForm.muxAssetId,
+        cloudflareVideoId: episodeForm.cloudflareVideoId,
         thumbnail: episodeForm.thumbnail
       });
       setEpisodeForm({
@@ -282,8 +280,7 @@ const Series: React.FC = () => {
         title: '',
         description: '',
         duration: 0,
-        muxPlaybackId: '',
-        muxAssetId: '',
+        cloudflareVideoId: '',
         thumbnail: ''
       });
       await refreshSelectedSeries(selectedSeries._id);
@@ -452,14 +449,11 @@ const Series: React.FC = () => {
                 />
                 <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
                   <TextField
-                    label="Mux Playback ID"
-                    value={episodeForm.muxPlaybackId}
-                    onChange={(e) => setEpisodeForm((prev) => ({ ...prev, muxPlaybackId: e.target.value }))}
-                  />
-                  <TextField
-                    label="Mux Asset ID"
-                    value={episodeForm.muxAssetId}
-                    onChange={(e) => setEpisodeForm((prev) => ({ ...prev, muxAssetId: e.target.value }))}
+                    label="Cloudflare Video ID"
+                    value={episodeForm.cloudflareVideoId}
+                    onChange={(e) => setEpisodeForm((prev) => ({ ...prev, cloudflareVideoId: e.target.value }))}
+                    helperText="Get this from Cloudflare Stream upload"
+                    fullWidth
                   />
                 </Stack>
                 <TextField
@@ -500,7 +494,7 @@ const Series: React.FC = () => {
                                 <TableCell>{ep.episodeNumber}</TableCell>
                                 <TableCell>{ep.title}</TableCell>
                                 <TableCell>{ep.duration} min</TableCell>
-                                <TableCell>{ep.muxPlaybackId}</TableCell>
+                                <TableCell>{ep.cloudflareVideoId}</TableCell>
                               </TableRow>
                             ))}
                           </TableBody>

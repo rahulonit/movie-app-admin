@@ -30,7 +30,7 @@ interface MovieRow {
   isPremium: boolean;
   language?: string;
   releaseYear?: number;
-  muxPlaybackId?: string;
+  cloudflareVideoId?: string;
 }
 
 type MoviePayload = {
@@ -43,8 +43,7 @@ type MoviePayload = {
   rating?: number;
   poster: { vertical: string; horizontal: string };
   trailerUrl?: string;
-  muxPlaybackId: string;
-  muxAssetId: string;
+  cloudflareVideoId: string;
   maturityRating: 'U' | 'UA' | 'A';
   isPremium: boolean;
 };
@@ -96,8 +95,7 @@ const emptyMovie = (): MoviePayload => ({
   rating: 0,
   poster: { vertical: '', horizontal: '' },
   trailerUrl: '',
-  muxPlaybackId: '',
-  muxAssetId: '',
+  cloudflareVideoId: '',
   maturityRating: 'U',
   isPremium: false
 });
@@ -146,8 +144,7 @@ const Content: React.FC = () => {
       rating: movie.rating || 0,
       poster: movie.poster || { vertical: '', horizontal: '' },
       trailerUrl: movie.trailerUrl || '',
-      muxPlaybackId: movie.muxPlaybackId || '',
-      muxAssetId: movie.muxAssetId || '',
+      cloudflareVideoId: movie.cloudflareVideoId || '',
       maturityRating: movie.maturityRating || 'U',
       isPremium: movie.isPremium || false
     });
@@ -168,7 +165,7 @@ const Content: React.FC = () => {
       if (!form.releaseYear) missing.push('releaseYear');
       if (!form.duration) missing.push('duration');
       if (!form.poster.vertical || !form.poster.horizontal) missing.push('poster URLs');
-      if (!form.muxPlaybackId || !form.muxAssetId) missing.push('Mux IDs');
+      if (!form.cloudflareVideoId) missing.push('Cloudflare Video ID');
       if (!['U', 'UA', 'A'].includes(form.maturityRating)) missing.push('maturity rating');
 
       if (!form.title) nextFieldErrors.title = 'Title is required';
@@ -179,8 +176,7 @@ const Content: React.FC = () => {
       if (!form.duration) nextFieldErrors.duration = 'Duration is required';
       if (!form.poster.vertical) nextFieldErrors.posterVertical = 'Vertical poster URL required';
       if (!form.poster.horizontal) nextFieldErrors.posterHorizontal = 'Horizontal poster URL required';
-      if (!form.muxPlaybackId) nextFieldErrors.muxPlaybackId = 'Mux playback ID required';
-      if (!form.muxAssetId) nextFieldErrors.muxAssetId = 'Mux asset ID required';
+      if (!form.cloudflareVideoId) nextFieldErrors.cloudflareVideoId = 'Cloudflare Video ID required';
       if (!['U', 'UA', 'A'].includes(form.maturityRating)) nextFieldErrors.maturityRating = 'Select U, UA, or A';
 
       if (missing.length) {
@@ -208,11 +204,10 @@ const Content: React.FC = () => {
         language: form.language
       };
       
-      // Debug: log Mux IDs being sent
+      // Debug: log Video ID being sent
       console.log('[Content] Movie payload:', {
         title: payload.title,
-        muxPlaybackId: payload.muxPlaybackId,
-        muxAssetId: payload.muxAssetId,
+        cloudflareVideoId: payload.cloudflareVideoId,
         fullPayload: payload
       });
       
@@ -319,8 +314,13 @@ const Content: React.FC = () => {
           </Box>
           <TextField label="Trailer URL" value={form.trailerUrl} onChange={(e) => updateField('trailerUrl', e.target.value)} fullWidth />
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 2 }}>
-            <TextField label="Mux Playback ID" value={form.muxPlaybackId} onChange={(e) => updateField('muxPlaybackId', e.target.value)} error={!!fieldErrors.muxPlaybackId} helperText={fieldErrors.muxPlaybackId} />
-            <TextField label="Mux Asset ID" value={form.muxAssetId} onChange={(e) => updateField('muxAssetId', e.target.value)} error={!!fieldErrors.muxAssetId} helperText={fieldErrors.muxAssetId} />
+            <TextField 
+              label="Cloudflare Video ID" 
+              value={form.cloudflareVideoId} 
+              onChange={(e) => updateField('cloudflareVideoId', e.target.value)} 
+              error={!!fieldErrors.cloudflareVideoId} 
+              helperText={fieldErrors.cloudflareVideoId || "Get this from Cloudflare Stream upload"} 
+            />
             <TextField select label="Maturity Rating" value={form.maturityRating} onChange={(e) => updateField('maturityRating', e.target.value as any)} error={!!fieldErrors.maturityRating} helperText={fieldErrors.maturityRating}>
               {MATURITY_RATINGS.map((rate) => (
                 <MenuItem key={rate} value={rate}>{rate}</MenuItem>
