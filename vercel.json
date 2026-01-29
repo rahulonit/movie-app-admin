@@ -13,7 +13,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/api/(.*)", "destination": "https://movie-app-backend-eta.vercel.app/api/$1" },
+    { "source": "/api/(.*)", "destination": "https://movie-app-backend-ecru.vercel.app/api/$1" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
