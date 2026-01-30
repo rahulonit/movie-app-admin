@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Alert,
   Autocomplete,
   Box,
   Button,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -19,8 +21,11 @@ import {
   TableHead,
   TableRow,
   TextField,
-  Typography
+  Typography,
+  InputAdornment,
+  Chip
 } from '@mui/material';
+import SearchIcon from '@mui/icons-material/Search';
 import api from '../api/client';
 
 interface SeriesRow {
@@ -93,26 +98,20 @@ const emptySeries = (): SeriesPayload => ({
 });
 
 const Series: React.FC = () => {
+  const navigate = useNavigate();
   const [rows, setRows] = useState<SeriesRow[]>([]);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [manageOpen, setManageOpen] = useState(false);
   const [form, setForm] = useState<SeriesPayload>(emptySeries());
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [selectedSeries, setSelectedSeries] = useState<SeriesRow | null>(null);
-  const [seasonNumberInput, setSeasonNumberInput] = useState<number>(1);
-  const [episodeForm, setEpisodeForm] = useState({
-    seasonNumber: '' as any,
-    episodeNumber: 1,
-    title: '',
-    description: '',
-    duration: 0,
-    cloudflareVideoId: '',
-    thumbnail: ''
-  });
-  const dialogTitle = useMemo(() => (editingId ? 'Edit Series' : 'Create Series'), [editingId]);
+  const [omdbSearchQuery, setOmdbSearchQuery] = useState('');
+  const [omdbSearchResults, setOmdbSearchResults] = useState<any[]>([]);
+  const [omdbLoading, setOmdbLoading] = useState(false);
+  const [omdbError, setOmdbError] = useState('');
+  const [showOmdbResults, setShowOmdbResults] = useState(false);
+  const dialogTitle = useMemo(() => (editingId ? 'Edit Series' : 'Create Series from OMDB'), [editingId]);
 
   const load = async () => {
     setLoading(true);
@@ -130,7 +129,69 @@ const Series: React.FC = () => {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
+
+  // Search OMDB for series
+  const handleOmdbSearch = async (query: string) => {
+    if (!query || query.length < 2) {
+      setOmdbSearchResults([]);
+      setOmdbError('');
+      return;
+    }
+
+    setOmdbLoading(true);
+    setOmdbError('');
+    try {
+      const res = await api.get(`/admin/omdb/search`, {
+        params: { query, type: 'series' }
+      });
+      const results = res.data.data?.results || [];
+      setOmdbSearchResults(results);
+      if (results.length === 0) {
+        setOmdbError('No series found. Try a different title.');
+      }
+    } catch (err: any) {
+      setOmdbError(err?.response?.data?.message || 'Search failed. Please try again.');
+      setOmdbSearchResults([]);
+    } finally {
+      setOmdbLoading(false);
+    }
+  };
+
+  // Fill form with OMDB data
+  const handleSelectOmdbSeries = async (omdbId: string) => {
+    setOmdbLoading(true);
+    setOmdbError('');
+    try {
+      const res = await api.get(`/admin/omdb/series/${omdbId}`);
+      const data = res.data.data;
+      
+      setForm({
+        title: data.title || '',
+        description: data.plot || data.description || '',
+        genres: data.genres?.slice(0, 5) || [],
+        language: data.language || data.languages?.[0] || 'English',
+        releaseYear: data.startYear || new Date().getFullYear(),
+        poster: {
+          vertical: data.posters?.vertical || data.poster || '',
+          horizontal: data.posters?.horizontal || data.poster || ''
+        },
+        maturityRating: (data.contentRating || 'U').toUpperCase() as any,
+        isPremium: false
+      });
+
+      setShowOmdbResults(false);
+      setOmdbSearchQuery('');
+      setOmdbSearchResults([]);
+      setFieldErrors({});
+    } catch (err: any) {
+      setOmdbError(err?.response?.data?.message || 'Failed to fetch series details');
+    } finally {
+      setOmdbLoading(false);
+    }
+  };
 
   const openCreate = () => {
     setEditingId(null);
@@ -156,10 +217,7 @@ const Series: React.FC = () => {
   };
 
   const openManage = (row: SeriesRow) => {
-    setSelectedSeries(row);
-    setManageOpen(true);
-    setSeasonNumberInput((row.seasons?.length || 0) + 1);
-    setEpisodeForm((prev) => ({ ...prev, seasonNumber: row.seasons?.[0]?.seasonNumber || '' }));
+    navigate(`/series/${row._id}/manage`);
   };
 
   const updateField = (key: keyof SeriesPayload, value: any) => {
@@ -231,64 +289,6 @@ const Series: React.FC = () => {
     }
   };
 
-  const refreshSelectedSeries = async (seriesId: string) => {
-    const fetched = await load();
-    const updated = fetched.find((r) => r._id === seriesId);
-    if (updated) setSelectedSeries(updated);
-  };
-
-  const handleAddSeason = async () => {
-    if (!selectedSeries) return;
-    try {
-      if (!seasonNumberInput || seasonNumberInput < 1) {
-        setError('Season number must be at least 1');
-        return;
-      }
-      await api.post(`/admin/series/${selectedSeries._id}/seasons`, { seasonNumber: seasonNumberInput });
-      setSeasonNumberInput(seasonNumberInput + 1);
-      await refreshSelectedSeries(selectedSeries._id);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Add season failed');
-    }
-  };
-
-  const handleAddEpisode = async () => {
-    if (!selectedSeries) return;
-    const missing: string[] = [];
-    if (!episodeForm.seasonNumber) missing.push('season');
-    if (!episodeForm.title) missing.push('title');
-    if (!episodeForm.description) missing.push('description');
-    if (!episodeForm.duration) missing.push('duration');
-    if (!episodeForm.cloudflareVideoId) missing.push('Cloudflare Video ID');
-    if (!episodeForm.thumbnail) missing.push('thumbnail');
-    if (missing.length) {
-      setError(`Missing required: ${missing.join(', ')}`);
-      return;
-    }
-    try {
-      await api.post(`/admin/series/${selectedSeries._id}/seasons/${episodeForm.seasonNumber}/episodes`, {
-        episodeNumber: episodeForm.episodeNumber,
-        title: episodeForm.title,
-        description: episodeForm.description,
-        duration: episodeForm.duration,
-        cloudflareVideoId: episodeForm.cloudflareVideoId,
-        thumbnail: episodeForm.thumbnail
-      });
-      setEpisodeForm({
-        seasonNumber: episodeForm.seasonNumber,
-        episodeNumber: episodeForm.episodeNumber + 1,
-        title: '',
-        description: '',
-        duration: 0,
-        cloudflareVideoId: '',
-        thumbnail: ''
-      });
-      await refreshSelectedSeries(selectedSeries._id);
-    } catch (err: any) {
-      setError(err?.response?.data?.message || 'Add episode failed');
-    }
-  };
-
   return (
     <Stack spacing={2}>
       <Stack direction="row" justifyContent="space-between" alignItems="center">
@@ -333,8 +333,127 @@ const Series: React.FC = () => {
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>{dialogTitle}</DialogTitle>
         <DialogContent sx={{ display: 'grid', gap: 2, pt: 2 }}>
-          <TextField label="Title" value={form.title} onChange={(e) => updateField('title', e.target.value)} required fullWidth error={!!fieldErrors.title} helperText={fieldErrors.title} />
-          <TextField label="Description" value={form.description} onChange={(e) => updateField('description', e.target.value)} multiline minRows={2} fullWidth error={!!fieldErrors.description} helperText={fieldErrors.description} />
+          {/* OMDB Search Section */}
+          {!editingId && (
+            <Box sx={{ 
+              p: 2, 
+              backgroundColor: '#f5f5f5', 
+              borderRadius: 1,
+              border: '1px solid #e0e0e0'
+            }}>
+              <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>
+                🔍 Search Series from OMDB
+              </Typography>
+              <Stack spacing={2}>
+                <TextField
+                  placeholder="Enter series name..."
+                  value={omdbSearchQuery}
+                  onChange={(e) => {
+                    setOmdbSearchQuery(e.target.value);
+                    handleOmdbSearch(e.target.value);
+                  }}
+                  onFocus={() => setShowOmdbResults(true)}
+                  fullWidth
+                  size="small"
+                  InputProps={{
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        {omdbLoading ? <CircularProgress size={20} /> : <SearchIcon />}
+                      </InputAdornment>
+                    ),
+                  }}
+                  error={!!omdbError}
+                  helperText={omdbError}
+                />
+
+                {/* OMDB Search Results */}
+                {showOmdbResults && omdbSearchResults.length > 0 && (
+                  <Box sx={{ 
+                    maxHeight: 300, 
+                    overflowY: 'auto',
+                    border: '1px solid #ddd',
+                    borderRadius: 1,
+                    backgroundColor: '#fff'
+                  }}>
+                    {omdbSearchResults.map((result: any) => (
+                      <Paper
+                        key={result.id}
+                        sx={{
+                          p: 1.5,
+                          mb: 1,
+                          cursor: 'pointer',
+                          backgroundColor: '#fff',
+                          '&:hover': { backgroundColor: '#f9f9f9' },
+                          borderBottom: '1px solid #eee',
+                          display: 'flex',
+                          gap: 2,
+                          alignItems: 'center'
+                        }}
+                        onClick={() => handleSelectOmdbSeries(result.id)}
+                      >
+                        {result.poster && (
+                          <Box
+                            component="img"
+                            src={result.poster}
+                            sx={{ width: 50, height: 75, objectFit: 'cover', borderRadius: 1 }}
+                          />
+                        )}
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 'bold' }}>
+                            {result.title}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {result.startYear} {result.endYear ? `- ${result.endYear}` : ''}
+                          </Typography>
+                          {result.description && (
+                            <Typography variant="caption" display="block" sx={{ mt: 0.5 }}>
+                              {result.description.substring(0, 100)}...
+                            </Typography>
+                          )}
+                        </Box>
+                        <Button variant="outlined" size="small">Select</Button>
+                      </Paper>
+                    ))}
+                  </Box>
+                )}
+
+                {omdbSearchQuery && !omdbLoading && omdbSearchResults.length === 0 && !omdbError && (
+                  <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
+                    Enter a series name to search
+                  </Typography>
+                )}
+              </Stack>
+              
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 2 }}>
+                ℹ️ Select a series to auto-fill all details from OMDB
+              </Typography>
+            </Box>
+          )}
+
+          {/* Form Fields - Auto-filled from OMDB */}
+          <TextField 
+            label="Title" 
+            value={form.title} 
+            onChange={(e) => updateField('title', e.target.value)} 
+            required 
+            fullWidth 
+            error={!!fieldErrors.title} 
+            helperText={fieldErrors.title}
+            disabled={omdbLoading}
+          />
+          
+          <TextField 
+            label="Description" 
+            value={form.description} 
+            onChange={(e) => updateField('description', e.target.value)} 
+            multiline 
+            minRows={2} 
+            fullWidth 
+            error={!!fieldErrors.description} 
+            helperText={fieldErrors.description}
+            disabled={omdbLoading}
+          />
+          
           <Autocomplete
             multiple
             options={GENRES}
@@ -347,169 +466,85 @@ const Series: React.FC = () => {
                 placeholder="Select up to 5"
                 error={!!fieldErrors.genres}
                 helperText={fieldErrors.genres}
+                disabled={omdbLoading}
               />
             )}
           />
+          
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 2 }}>
-            <TextField select label="Language" value={form.language} onChange={(e) => updateField('language', e.target.value)} error={!!fieldErrors.language} helperText={fieldErrors.language}>
+            <TextField 
+              select 
+              label="Language" 
+              value={form.language} 
+              onChange={(e) => updateField('language', e.target.value)} 
+              error={!!fieldErrors.language} 
+              helperText={fieldErrors.language}
+              disabled={omdbLoading}
+            >
               {LANGUAGES.map((lang) => (
                 <MenuItem key={lang} value={lang}>{lang}</MenuItem>
               ))}
             </TextField>
-            <TextField label="Release Year" type="number" value={form.releaseYear} onChange={(e) => updateField('releaseYear', Number(e.target.value))} error={!!fieldErrors.releaseYear} helperText={fieldErrors.releaseYear} />
-            <TextField select label="Maturity Rating" value={form.maturityRating} onChange={(e) => updateField('maturityRating', e.target.value as any)} error={!!fieldErrors.maturityRating} helperText={fieldErrors.maturityRating}>
+            
+            <TextField 
+              label="Release Year" 
+              type="number" 
+              value={form.releaseYear} 
+              onChange={(e) => updateField('releaseYear', Number(e.target.value))} 
+              error={!!fieldErrors.releaseYear} 
+              helperText={fieldErrors.releaseYear}
+              disabled={omdbLoading}
+            />
+            
+            <TextField 
+              select 
+              label="Maturity Rating" 
+              value={form.maturityRating} 
+              onChange={(e) => updateField('maturityRating', e.target.value as any)} 
+              error={!!fieldErrors.maturityRating} 
+              helperText={fieldErrors.maturityRating}
+              disabled={omdbLoading}
+            >
               {MATURITY_RATINGS.map((rate) => (
                 <MenuItem key={rate} value={rate}>{rate}</MenuItem>
               ))}
             </TextField>
           </Box>
+          
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(220px,1fr))', gap: 2 }}>
-            <TextField label="Poster Vertical URL" value={form.poster.vertical} onChange={(e) => updateField('poster', { ...form.poster, vertical: e.target.value })} error={!!fieldErrors.posterVertical} helperText={fieldErrors.posterVertical} />
-            <TextField label="Poster Horizontal URL" value={form.poster.horizontal} onChange={(e) => updateField('poster', { ...form.poster, horizontal: e.target.value })} error={!!fieldErrors.posterHorizontal} helperText={fieldErrors.posterHorizontal} />
+            <TextField 
+              label="Poster Vertical URL" 
+              value={form.poster.vertical} 
+              onChange={(e) => updateField('poster', { ...form.poster, vertical: e.target.value })} 
+              error={!!fieldErrors.posterVertical} 
+              helperText={fieldErrors.posterVertical}
+              disabled={omdbLoading}
+            />
+            
+            <TextField 
+              label="Poster Horizontal URL" 
+              value={form.poster.horizontal} 
+              onChange={(e) => updateField('poster', { ...form.poster, horizontal: e.target.value })} 
+              error={!!fieldErrors.posterHorizontal} 
+              helperText={fieldErrors.posterHorizontal}
+              disabled={omdbLoading}
+            />
           </Box>
-          <FormControlLabel control={<Switch checked={form.isPremium} onChange={(e) => updateField('isPremium', e.target.checked)} />} label="Premium" />
+          
+          <FormControlLabel 
+            control={<Switch checked={form.isPremium} onChange={(e) => updateField('isPremium', e.target.checked)} disabled={omdbLoading} />} 
+            label="Premium" 
+          />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
-          <Button variant="contained" onClick={handleSave}>{editingId ? 'Update' : 'Create'}</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={manageOpen} onClose={() => setManageOpen(false)} maxWidth="lg" fullWidth>
-        <DialogTitle>Manage Seasons & Episodes {selectedSeries ? `- ${selectedSeries.title}` : ''}</DialogTitle>
-        <DialogContent sx={{ display: 'grid', gap: 2, pt: 2 }}>
-          <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-            <Paper sx={{ p: 2, flex: 1 }}>
-              <Typography variant="subtitle1" gutterBottom>Add Season</Typography>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <TextField
-                  label="Season Number"
-                  type="number"
-                  value={seasonNumberInput}
-                  onChange={(e) => setSeasonNumberInput(Number(e.target.value))}
-                  sx={{ width: 160 }}
-                />
-                <Button variant="contained" onClick={handleAddSeason} disabled={!selectedSeries}>Add Season</Button>
-              </Stack>
-              {selectedSeries?.seasons?.length ? (
-                <Stack spacing={1} sx={{ mt: 2 }}>
-                  {selectedSeries.seasons
-                    .slice()
-                    .sort((a, b) => a.seasonNumber - b.seasonNumber)
-                    .map((season) => (
-                      <Paper key={season.seasonNumber} sx={{ p: 1 }}>
-                        <Typography variant="subtitle2">Season {season.seasonNumber}</Typography>
-                        <Typography variant="body2" color="text.secondary">Episodes: {season.episodes?.length || 0}</Typography>
-                      </Paper>
-                    ))}
-                </Stack>
-              ) : (
-                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>No seasons yet.</Typography>
-              )}
-            </Paper>
-
-            <Paper sx={{ p: 2, flex: 2 }}>
-              <Typography variant="subtitle1" gutterBottom>Add Episode</Typography>
-              <Stack spacing={2}>
-                <TextField
-                  select
-                  label="Season"
-                  value={episodeForm.seasonNumber}
-                  onChange={(e) => setEpisodeForm((prev) => ({ ...prev, seasonNumber: e.target.value }))}
-                >
-                  {(selectedSeries?.seasons || []).map((s) => (
-                    <MenuItem key={s.seasonNumber} value={s.seasonNumber}>Season {s.seasonNumber}</MenuItem>
-                  ))}
-                </TextField>
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                  <TextField
-                    label="Episode Number"
-                    type="number"
-                    value={episodeForm.episodeNumber}
-                    onChange={(e) => setEpisodeForm((prev) => ({ ...prev, episodeNumber: Number(e.target.value) }))}
-                  />
-                  <TextField
-                    label="Duration (min)"
-                    type="number"
-                    value={episodeForm.duration}
-                    onChange={(e) => setEpisodeForm((prev) => ({ ...prev, duration: Number(e.target.value) }))}
-                  />
-                </Stack>
-                <TextField
-                  label="Title"
-                  value={episodeForm.title}
-                  onChange={(e) => setEpisodeForm((prev) => ({ ...prev, title: e.target.value }))}
-                />
-                <TextField
-                  label="Description"
-                  multiline
-                  minRows={2}
-                  value={episodeForm.description}
-                  onChange={(e) => setEpisodeForm((prev) => ({ ...prev, description: e.target.value }))}
-                />
-                <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
-                  <TextField
-                    label="Cloudflare Video ID"
-                    value={episodeForm.cloudflareVideoId}
-                    onChange={(e) => setEpisodeForm((prev) => ({ ...prev, cloudflareVideoId: e.target.value }))}
-                    helperText="Get this from Cloudflare Stream upload"
-                    fullWidth
-                  />
-                </Stack>
-                <TextField
-                  label="Thumbnail URL"
-                  value={episodeForm.thumbnail}
-                  onChange={(e) => setEpisodeForm((prev) => ({ ...prev, thumbnail: e.target.value }))}
-                />
-                <Button variant="contained" onClick={handleAddEpisode} disabled={!selectedSeries || !(selectedSeries.seasons?.length)}>
-                  Add Episode
-                </Button>
-              </Stack>
-            </Paper>
-          </Stack>
-
-          {selectedSeries?.seasons?.length ? (
-            <Paper sx={{ p: 2 }}>
-              <Typography variant="subtitle1" gutterBottom>Seasons & Episodes</Typography>
-              <Stack spacing={2}>
-                {selectedSeries.seasons
-                  .slice()
-                  .sort((a, b) => a.seasonNumber - b.seasonNumber)
-                  .map((season) => (
-                    <Box key={season.seasonNumber} sx={{ border: '1px solid #e0e0e0', borderRadius: 1, p: 1 }}>
-                      <Typography variant="subtitle2">Season {season.seasonNumber}</Typography>
-                      {season.episodes?.length ? (
-                        <Table size="small">
-                          <TableHead>
-                            <TableRow>
-                              <TableCell>#</TableCell>
-                              <TableCell>Title</TableCell>
-                              <TableCell>Duration</TableCell>
-                              <TableCell>Mux Playback</TableCell>
-                            </TableRow>
-                          </TableHead>
-                          <TableBody>
-                            {season.episodes.map((ep: any) => (
-                              <TableRow key={ep._id || `${season.seasonNumber}-${ep.episodeNumber}`}>
-                                <TableCell>{ep.episodeNumber}</TableCell>
-                                <TableCell>{ep.title}</TableCell>
-                                <TableCell>{ep.duration} min</TableCell>
-                                <TableCell>{ep.cloudflareVideoId}</TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      ) : (
-                        <Typography variant="body2" color="text.secondary">No episodes yet.</Typography>
-                      )}
-                    </Box>
-                  ))}
-              </Stack>
-            </Paper>
-          ) : null}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setManageOpen(false)}>Close</Button>
+          <Button 
+            variant="contained" 
+            onClick={handleSave}
+            disabled={omdbLoading}
+          >
+            {editingId ? 'Update' : 'Create'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Stack>

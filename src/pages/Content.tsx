@@ -117,7 +117,6 @@ const emptyMovie = (): MoviePayload => ({
   imdbId: '',
   director: '',
   writer: '',
-  stars: [],
   imdbRating: 0,
   imdbLink: ''
 });
