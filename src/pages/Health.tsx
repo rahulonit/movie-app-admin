@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Button, Paper, Stack, Typography } from '@mui/material';
+import { Alert, Button, Paper, Stack, Typography, Box, Chip } from '@mui/material';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
 import api from '../api/client';
 
 interface HealthState {
   cloudinary: { ok: boolean; message: string };
-  mux: { ok: boolean; message: string };
+  cloudflare: { ok: boolean; message: string };
 }
 
 const Health: React.FC = () => {
@@ -35,13 +37,43 @@ const Health: React.FC = () => {
       </Stack>
       {error && <Alert severity="error">{error}</Alert>}
       {data && (
-        <Paper sx={{ p: 2, display: 'grid', gap: 2 }}>
-          <Alert severity={data.cloudinary.ok ? 'success' : 'error'}>
-            Cloudinary: {data.cloudinary.message}
-          </Alert>
-          <Alert severity={data.mux.ok ? 'success' : 'error'}>
-            Mux: {data.mux.message}
-          </Alert>
+        <Paper sx={{ p: 3, display: 'grid', gap: 2 }}>
+          {/* Cloudinary */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 2, borderBottom: '1px solid rgba(0,0,0,0.1)' }}>
+            <Stack spacing={1} sx={{ flex: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Cloudinary</Typography>
+              <Typography variant="body2" sx={{ color: '#666' }}>{data.cloudinary.message}</Typography>
+            </Stack>
+            <Chip
+              icon={data.cloudinary.ok ? <CheckCircleIcon /> : <CancelIcon />}
+              label={data.cloudinary.ok ? 'Connected' : 'Disconnected'}
+              color={data.cloudinary.ok ? 'success' : 'error'}
+              variant="outlined"
+            />
+          </Box>
+
+          {/* Cloudflare Stream */}
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <Stack spacing={1} sx={{ flex: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>Cloudflare Stream</Typography>
+              <Typography variant="body2" sx={{ color: '#666' }}>{data.cloudflare.message}</Typography>
+            </Stack>
+            <Chip
+              icon={data.cloudflare.ok ? <CheckCircleIcon /> : <CancelIcon />}
+              label={data.cloudflare.ok ? 'Connected' : 'Disconnected'}
+              color={data.cloudflare.ok ? 'success' : 'error'}
+              variant="outlined"
+            />
+          </Box>
+
+          {/* Overall Status */}
+          <Box sx={{ mt: 2, pt: 2, borderTop: '1px solid rgba(0,0,0,0.1)' }}>
+            <Alert severity={data.cloudinary.ok && data.cloudflare.ok ? 'success' : 'warning'}>
+              {data.cloudinary.ok && data.cloudflare.ok
+                ? '✅ All integrations are operational'
+                : '⚠️ Some integrations are not available'}
+            </Alert>
+          </Box>
         </Paper>
       )}
     </Stack>

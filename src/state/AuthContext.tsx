@@ -34,13 +34,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string, password: string) => {
     setLoading(true);
     try {
+      console.log('[Auth] Attempting login with email:', email);
       const res = await api.post('/auth/login', { email, password });
+      console.log('[Auth] Login response:', res.data);
       const { accessToken, refreshToken, user: u } = res.data.data;
       setAccessToken(accessToken);
       localStorage.setItem('refreshToken', refreshToken);
       const newUser = { id: u.id, email: u.email, role: u.role };
       localStorage.setItem('user', JSON.stringify(newUser));
       setUser(newUser);
+    } catch (error: any) {
+      console.error('[Auth] Login failed:', error.response?.data || error.message);
+      throw error;
     } finally {
       setLoading(false);
     }

@@ -61,6 +61,7 @@ const ManageSeriesPage: React.FC = () => {
   const [series, setSeries] = useState<SeriesData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [seasonNumberInput, setSeasonNumberInput] = useState<number>(1);
   const [selectedSeason, setSelectedSeason] = useState<number>(1);
 
@@ -191,18 +192,24 @@ const ManageSeriesPage: React.FC = () => {
 
     try {
       setLoading(true);
+      setError('');
+      console.log('[Episode Save] Mode:', editingEpisodeId ? 'UPDATE' : 'CREATE');
+      console.log('[Episode Save] Data:', episodeForm);
+      
       if (editingEpisodeId) {
         // Update existing episode
-        await api.put(
+        const response = await api.put(
           `/admin/series/${series._id}/seasons/${selectedSeason}/episodes/${editingEpisodeId}`,
           episodeForm
         );
+        console.log('[Episode Update] Success:', response.data);
       } else {
         // Create new episode
-        await api.post(
+        const response = await api.post(
           `/admin/series/${series._id}/seasons/${selectedSeason}/episodes`,
           episodeForm
         );
+        console.log('[Episode Create] Success:', response.data);
       }
       setEpisodeForm({
         episodeNumber: episodeForm.episodeNumber + 1,
@@ -216,8 +223,11 @@ const ManageSeriesPage: React.FC = () => {
       setDurationFetched(false);
       await loadSeries();
       setError('');
+      setSuccess(editingEpisodeId ? 'Episode updated successfully' : 'Episode added successfully');
+      setTimeout(() => setSuccess(''), 3000);
     } catch (err: any) {
-      setError(err?.response?.data?.message || 'Failed to save episode');
+      console.error('[Episode Save] Error:', err.response?.data || err.message);
+      setError(err?.response?.data?.message || err?.message || 'Failed to save episode');
     } finally {
       setLoading(false);
     }
@@ -296,6 +306,7 @@ const ManageSeriesPage: React.FC = () => {
       </Stack>
 
       {error && <Alert severity="error">{error}</Alert>}
+      {success && <Alert severity="success">{success}</Alert>}
 
       {/* Add Season Section */}
       <Card>
@@ -475,6 +486,9 @@ const ManageSeriesPage: React.FC = () => {
                       variant="outlined"
                       onClick={() => {
                         setEditingEpisodeId(null);
+                        setDurationFetched(false);
+                        setError('');
+                        setSuccess('');
                         setEpisodeForm({
                           episodeNumber: currentEpisodes.length + 1,
                           title: '',
