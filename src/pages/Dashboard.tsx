@@ -48,18 +48,20 @@ const Dashboard: React.FC = () => {
   const [genreDist, setGenreDist] = useState<GenreDistribution>([]);
   const [topMovies, setTopMovies] = useState<TopItem[]>([]);
   const [topSeries, setTopSeries] = useState<TopItem[]>([]);
+  const [recommendations, setRecommendations] = useState<any[]>([]);
   const [error, setError] = useState('');
 
   const load = async () => {
     setError('');
     try {
-      const [dash, viewsRes, distRes, genreRes, growthRes, topRes] = await Promise.all([
+      const [dash, viewsRes, distRes, genreRes, growthRes, topRes, recRes] = await Promise.all([
         api.get('/admin/analytics/dashboard'),
         api.get('/admin/analytics/views-per-day'),
         api.get('/admin/analytics/content-distribution'),
         api.get('/admin/analytics/genre-distribution'),
         api.get('/admin/analytics/user-growth'),
-        api.get('/admin/analytics/top-content')
+        api.get('/admin/analytics/top-content'),
+        api.get('/recommendations')
       ]);
 
       setStats(dash.data.data);
@@ -69,6 +71,7 @@ const Dashboard: React.FC = () => {
       setGrowth(growthRes.data.data.userGrowth || []);
       setTopMovies(topRes.data.data.topMovies || []);
       setTopSeries(topRes.data.data.topSeries || []);
+      setRecommendations(recRes.data.data || []);
     } catch (err: any) {
       setError(err?.response?.data?.message || 'Failed to load analytics');
     }
@@ -78,6 +81,24 @@ const Dashboard: React.FC = () => {
 
   return (
     <Stack spacing={2}>
+      {/* Recommended for You Row */}
+      {recommendations.length > 0 && (
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="h6">Recommended for You</Typography>
+          <Stack direction="row" spacing={2} sx={{ overflowX: 'auto', py: 1 }}>
+            {recommendations.map((item, idx) => (
+              <Box key={item._id || idx} sx={{ minWidth: 160, maxWidth: 180 }}>
+                <img
+                  src={item.poster?.vertical || item.poster?.horizontal}
+                  alt={item.title}
+                  style={{ width: '100%', borderRadius: 8, objectFit: 'cover' }}
+                />
+                <Typography variant="subtitle2" noWrap>{item.title}</Typography>
+              </Box>
+            ))}
+          </Stack>
+        </Paper>
+      )}
       {error && <Alert severity="error">{error}</Alert>}
       <Grid container spacing={2}>
         <Grid item xs={12} sm={6} md={3}><StatCard title="Total Users" value={stats?.totalUsers ?? '--'} /></Grid>
